@@ -1,16 +1,29 @@
 package com.example.rxjava_android_practice
 
+import android.content.Intent
+import android.content.pm.ResolveInfo
+import android.graphics.drawable.Drawable
+import android.media.Image
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.telephony.TelephonyCallback
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.TextView
+import androidx.recyclerview.widget.RecyclerView
 import com.example.rxjava_android_practice.databinding.ActivityMainBinding
+import io.reactivex.Emitter
 import io.reactivex.Observable
+import io.reactivex.Scheduler
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.observers.DisposableObserver
+import io.reactivex.schedulers.Schedulers
+import io.reactivex.subjects.PublishSubject
 import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
@@ -64,5 +77,67 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         mDisposable.dispose()
         super.onDestroy()
+    }
+
+    fun getItemObservable() : Observable<RecyclerItem> {
+        val intent = Intent(Intent.ACTION_MAIN)
+        intent.addCategory(Intent.CATEGORY_LAUNCHER)
+
+        return Observable.fromIterable(packageManager.queryIntentActivities(intent, 0))
+            .sorted(ResolveInfo.DisplayNameComparator(packageManager))
+            .subscribeOn(Schedulers.io())
+            .observeOn(Schedulers.io())
+            .map { item ->
+                val image = item.activityInfo.loadIcon(packageManager)
+                val title = item.activityInfo.loadLabel(packageManager).toString()
+                RecyclerItem(image, title)
+            }
+    }
+}
+
+class RecyclerItem(val image: Drawable, val title: String) {}
+
+class CustomViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+    var image : ImageView = ImageView(itemView.context)
+    var title : TextView = TextView(itemView.context)
+
+    fun getClickObserver(item : RecyclerItem) : Observable<RecyclerItem> {
+        return Observable.create{ emitter -> this.itemView.setOnClickListener{
+            emitter.onNext(item)
+        }}
+    }
+}
+
+class CustomAdapter : RecyclerView.Adapter<CustomViewHolder>() {
+    var mItems = ArrayList<RecyclerItem>()
+    var mPublishSubject = PublishSubject.create<RecyclerItem>()
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CustomViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.recycler_item, parent, false)
+
+        return CustomViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: CustomViewHolder, position: Int) {
+        val item = mItems[position]
+        holder.image.setImageDrawable(item.image)
+        holder.title.text = item.title
+        holder.getClickObserver(item).subscribe(mPublishSubject)
+    }
+
+    override fun getItemCount(): Int {
+        return mItems.size
+    }
+
+    fun updateItems(items : ArrayList<RecyclerItem>) {
+        mItems.addAll(items)
+    }
+
+    fun updateItem(item : RecyclerItem) {
+        mItems.add(item)
+    }
+
+    fun getItemPublishSubject() : PublishSubject<RecyclerItem> {
+        return mPublishSubject
     }
 }

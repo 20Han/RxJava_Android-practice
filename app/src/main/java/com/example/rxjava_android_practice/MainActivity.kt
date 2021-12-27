@@ -14,6 +14,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.rxjava_android_practice.databinding.ActivityMainBinding
 import io.reactivex.Emitter
@@ -28,6 +30,7 @@ import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
+    private val customAdapter = CustomAdapter()
     private lateinit var mDisposable : Disposable
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,6 +45,13 @@ class MainActivity : AppCompatActivity() {
             .observeOn(AndroidSchedulers.mainThread())
             .subscribeWith(getObserver())
 
+        binding.recyclerView.apply {
+            layoutManager = LinearLayoutManager(applicationContext)
+            adapter = customAdapter
+            customAdapter.getItemPublishSubject().subscribe { s ->
+                Toast.makeText(applicationContext, s.title, Toast.LENGTH_SHORT).show()
+            }
+        }
 
         setContentView(view)
     }
@@ -79,7 +89,19 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    fun getItemObservable() : Observable<RecyclerItem> {
+    override fun onStart() {
+        super.onStart()
+
+        getItemObservable()
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe { item ->
+                Log.d("testtest", "onResume: ${item.title}")
+                customAdapter.updateItem(item)
+                customAdapter.notifyDataSetChanged()
+            }
+    }
+
+    private fun getItemObservable() : Observable<RecyclerItem> {
         val intent = Intent(Intent.ACTION_MAIN)
         intent.addCategory(Intent.CATEGORY_LAUNCHER)
 
@@ -98,8 +120,8 @@ class MainActivity : AppCompatActivity() {
 class RecyclerItem(val image: Drawable, val title: String) {}
 
 class CustomViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-    var image : ImageView = ImageView(itemView.context)
-    var title : TextView = TextView(itemView.context)
+    var image : ImageView = itemView.findViewById(R.id.item_image)
+    var title : TextView = itemView.findViewById(R.id.item_title)
 
     fun getClickObserver(item : RecyclerItem) : Observable<RecyclerItem> {
         return Observable.create{ emitter -> this.itemView.setOnClickListener{
